@@ -5,6 +5,7 @@ import (
 	"fmt"
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	hyperv1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/openshiftmanager/libraryopenshiftmanager"
 	"github.com/openshift/hypershift/support/util"
 	"github.com/openshift/multi-operator-manager/pkg/library/libraryinputresources"
 
@@ -35,7 +36,7 @@ func projectSecretOpenshiftAuthenticationConfigSystemRouterCerts(ctx context.Con
 }
 
 // openshift-authentication/oauth-openshift
-func getRouteOpenshiftAuthenticationOauthOpenshift(ctx context.Context, mgmtKubeClient *dynamic.DynamicClient, hostedControlPlane *hypershiftv1beta1.HostedControlPlane) (*libraryinputresources.Resource, error) {
+func getRouteOpenshiftAuthenticationOauthOpenshift(inputCtx libraryopenshiftmanager.InputResourceGetterContext) (*libraryinputresources.Resource, error) {
 	// TODO: figure out how to reconcile route on HCP
 	//
 	// atm reconciled in https://github.com/openshift/hypershift/blob/6b4d6324de66b9aabdbe7be434b28a17c900074b/control-plane-operator/controllers/hostedcontrolplane/hostedcontrolplane_controller.go#L1305
@@ -50,21 +51,21 @@ func getRouteOpenshiftAuthenticationOauthOpenshift(ctx context.Context, mgmtKube
 	// https://github.com/openshift/hypershift/blob/6b4d6324de66b9aabdbe7be434b28a17c900074b/control-plane-operator/controllers/hostedcontrolplane/hostedcontrolplane_controller.go#L1646
 	//
 	// I think that on standalone route is managed by the openshift-router operator
-	serviceStrategy := util.ServicePublishingStrategyByTypeForHCP(hostedControlPlane, hyperv1.OAuthServer)
+	serviceStrategy := util.ServicePublishingStrategyByTypeForHCP(inputCtx.HostedControlPlane, hyperv1.OAuthServer)
 	if serviceStrategy == nil {
 		return nil, fmt.Errorf("OAuth strategy not specified")
 	}
 	if serviceStrategy.Type != hyperv1.Route {
 		return nil, fmt.Errorf("unsupported (not implemented) service publishing strategy type: %v", serviceStrategy.Type)
 	}
-	if !util.IsPublicHCP(hostedControlPlane) {
-		return nil, fmt.Errorf("unsupported (not implemented) publishing scope of cluster endpoints for: %s", hostedControlPlane.Name)
+	if !util.IsPublicHCP(inputCtx.HostedControlPlane) {
+		return nil, fmt.Errorf("unsupported (not implemented) publishing scope of cluster endpoints for: %s", inputCtx.HostedControlPlane.Name)
 	}
 	gvr := schema.GroupVersionResource{Group: "route.openshift.io", Version: "v1", Resource: "routes"}
 
 	// TODO: export the route name
 	// xref: https://github.com/openshift/hypershift/blob/8be1d9c6f8f79106444e48f2b7d0069b942ba0d7/control-plane-operator/controllers/hostedcontrolplane/manifests/infra.go#L104
-	route, err := mgmtKubeClient.Resource(gvr).Namespace(hostedControlPlane.Namespace).Get(ctx, "oauth", metav1.GetOptions{})
+	route, err := inputCtx.MgmtKubeClient.Resource(gvr).Namespace(inputCtx.HostedControlPlane.Namespace).Get(inputCtx.Ctx, "oauth", metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +83,7 @@ func getRouteOpenshiftAuthenticationOauthOpenshift(ctx context.Context, mgmtKube
 }
 
 // openshift-authentication/oauth-openshift
-func getServiceOpenshiftAuthenticationOauthOpenshift(ctx context.Context, mgmtKubeClient *dynamic.DynamicClient, hostedControlPlane *hypershiftv1beta1.HostedControlPlane) (*libraryinputresources.Resource, error) {
+func getServiceOpenshiftAuthenticationOauthOpenshift(inputCtx libraryopenshiftmanager.InputResourceGetterContext) (*libraryinputresources.Resource, error) {
 	// openshift-authentication/oauth-openshift service
 	// is reconciled in https://github.com/openshift/hypershift/blob/6b4d6324de66b9aabdbe7be434b28a17c900074b/control-plane-operator/controllers/hostedcontrolplane/hostedcontrolplane_controller.go#L1305
 	//
@@ -90,13 +91,13 @@ func getServiceOpenshiftAuthenticationOauthOpenshift(ctx context.Context, mgmtKu
 	// and we can read the service manifest
 	// TODO: fix me (figure out how to reconcile service on HCP)
 
-	serviceStrategy := util.ServicePublishingStrategyByTypeForHCP(hostedControlPlane, hyperv1.OAuthServer)
+	serviceStrategy := util.ServicePublishingStrategyByTypeForHCP(inputCtx.HostedControlPlane, hyperv1.OAuthServer)
 	if serviceStrategy == nil {
 		return nil, fmt.Errorf("OAuth strategy not specified")
 	}
 
 	gvr := corev1.SchemeGroupVersion.WithResource("services")
-	svc, err := mgmtKubeClient.Resource(gvr).Namespace(hostedControlPlane.Namespace).Get(ctx, "oauth-openshift", metav1.GetOptions{})
+	svc, err := inputCtx.MgmtKubeClient.Resource(gvr).Namespace(inputCtx.HostedControlPlane.Namespace).Get(inputCtx.Ctx, "oauth-openshift", metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -114,10 +115,10 @@ func getServiceOpenshiftAuthenticationOauthOpenshift(ctx context.Context, mgmtKu
 }
 
 // openshift-authentication/v4-0-config-system-session
-func getSecretOpenshiftAuthenticationConfigSystemSession(ctx context.Context, mgmtKubeClient *dynamic.DynamicClient, controlPlaneNamespace string) (*libraryinputresources.Resource, error) {
+func getSecretOpenshiftAuthenticationConfigSystemSession(inputCtx libraryopenshiftmanager.InputResourceGetterContext) (*libraryinputresources.Resource, error) {
 	standaloneResourceNamespace := "openshift-authentication"
 	standaloneResourceName := "v4-0-config-system-session"
-	return getResourceToInputResources(ctx, coreSecretGVR, mgmtKubeClient, controlPlaneNamespace, hcpNameForNamespacedStandaloneResource(standaloneResourceNamespace, standaloneResourceName), standaloneResourceNamespace, standaloneResourceName)
+	return getResourceToInputResources(inputCtx.Ctx, coreSecretGVR, inputCtx.MgmtKubeClient, inputCtx.ControlPlaneNamespace, hcpNameForNamespacedStandaloneResource(standaloneResourceNamespace, standaloneResourceName), standaloneResourceNamespace, standaloneResourceName)
 }
 
 // openshift-authentication/v4-0-config-system-cliconfig

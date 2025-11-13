@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/openshiftmanager/libraryopenshiftmanager"
 	"os"
 	"time"
 
@@ -154,6 +155,20 @@ func (o *OpenshiftManagerOperator) Run(ctx context.Context) error {
 		return err
 	}
 
+	openshiftManagerController, err := libraryopenshiftmanager.New(ctrl.Log, mgmtCfg, o.Namespace, o.HostedControlPlaneName, o.InputDirectory, o.OutputDirectory)
+	if err != nil {
+		return err
+	}
+
+	openshiftManagerController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactLowLevelOperator("authentications"), projectOperatorAuthenticationCluster)
+	openshiftManagerController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactConfigResource("authentications"), projectConfigAuthenticationCluster)
+	openshiftManagerController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactResource("config.openshift.io", "v1", "clusterversions", "", "version"), projectConfigClusterVersionCluster)
+	openshiftManagerController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactResource("route.openshift.io", "v1", "routes", "openshift-authentication", "oauth-openshift"), getRouteOpenshiftAuthenticationOauthOpenshift)
+	openshiftManagerController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactResource("", "v1", "services", "openshift-authentication", "oauth-openshift"), getServiceOpenshiftAuthenticationOauthOpenshift)
+	openshiftManagerController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactSecret("openshift-authentication", "v4-0-config-system-session"), getSecretOpenshiftAuthenticationConfigSystemSession)
+
+	return openshiftManagerController.Start(ctx)
+
 	if err := o.bootstrap(ctx, mgmtKubeClient, guestClusterKubeClient); err != nil {
 		return err
 	}
@@ -275,35 +290,42 @@ func (o *OpenshiftManagerOperator) getAuthOperatorRequiredInputResourcesForResou
 		ret.Insert(resourceInstance)
 	}
 
+	inputCtx := libraryopenshiftmanager.InputResourceGetterContext{
+		Ctx:                   ctx,
+		MgmtKubeClient:        mgmtKubeClient,
+		ControlPlaneNamespace: o.Namespace,
+		HostedControlPlane:    hostedControlPlane,
+	}
+
 	// for the POC, we only need to take into account the ExactResources
 	// TODO:add support for other types
 	for _, currResource := range resourceList.ExactResources {
 		switch currResource {
 		// operator.openshift.io
 		case libraryinputresources.ExactLowLevelOperator("authentications"):
-			handleResourceInstanceAndErrorFn(projectOperatorAuthenticationCluster(ctx, mgmtKubeClient, o.Namespace))
+			handleResourceInstanceAndErrorFn(projectOperatorAuthenticationCluster(inputCtx))
 		// config.openshift.io
 		case libraryinputresources.ExactConfigResource("apiservers"):
 			handleResourceInstanceAndErrorFn(projectConfigApiserverCluster(hostedControlPlane))
 		case libraryinputresources.ExactConfigResource("authentications"):
-			handleResourceInstanceAndErrorFn(projectConfigAuthenticationCluster(hostedControlPlane))
+			handleResourceInstanceAndErrorFn(projectConfigAuthenticationCluster(inputCtx))
 		case libraryinputresources.ExactConfigResource("infrastructures"):
 			handleResourceInstanceAndErrorFn(projectConfigInfrastructureCluster(hostedControlPlane))
 		case libraryinputresources.ExactConfigResource("oauths"):
 			handleResourceInstanceAndErrorFn(projectConfigOAuthCluster(hostedControlPlane))
 		case libraryinputresources.ExactResource("config.openshift.io", "v1", "clusterversions", "", "version"):
-			handleResourceInstanceAndErrorFn(projectConfigClusterVersionCluster(hostedControlPlane))
+			handleResourceInstanceAndErrorFn(projectConfigClusterVersionCluster(inputCtx))
 		// oauth-server
 		case libraryinputresources.ExactResource("route.openshift.io", "v1", "routes", "openshift-authentication", "oauth-openshift"):
-			handleResourceInstanceAndErrorFn(getRouteOpenshiftAuthenticationOauthOpenshift(ctx, mgmtKubeClient, hostedControlPlane))
+			handleResourceInstanceAndErrorFn(getRouteOpenshiftAuthenticationOauthOpenshift(inputCtx))
 		case libraryinputresources.ExactResource("", "v1", "services", "openshift-authentication", "oauth-openshift"):
-			handleResourceInstanceAndErrorFn(getServiceOpenshiftAuthenticationOauthOpenshift(ctx, mgmtKubeClient, hostedControlPlane))
+			handleResourceInstanceAndErrorFn(getServiceOpenshiftAuthenticationOauthOpenshift(inputCtx))
 		case libraryinputresources.ExactSecret("openshift-authentication", "v4-0-config-system-router-certs"):
 			handleResourceInstanceAndErrorFn(projectSecretOpenshiftAuthenticationConfigSystemRouterCerts(ctx, mgmtKubeClient, o.Namespace, hostedControlPlane))
 		case libraryinputresources.ExactConfigMap("openshift-authentication", "v4-0-config-system-cliconfig"):
 			handleResourceInstanceAndErrorFn(getConfigMapOpenshiftAuthenticationConfigSystemCliconfig(ctx, mgmtKubeClient, o.Namespace))
 		case libraryinputresources.ExactSecret("openshift-authentication", "v4-0-config-system-session"):
-			handleResourceInstanceAndErrorFn(getSecretOpenshiftAuthenticationConfigSystemSession(ctx, mgmtKubeClient, o.Namespace))
+			handleResourceInstanceAndErrorFn(getSecretOpenshiftAuthenticationConfigSystemSession(inputCtx))
 		case libraryinputresources.ExactSecret("openshift-authentication", "v4-0-config-system-serving-cert"):
 			handleResourceInstanceAndErrorFn(getSecretOpenshiftAuthenticationConfigSystemServingCert(ctx, mgmtKubeClient, o.Namespace))
 		case libraryinputresources.ExactConfigMap("openshift-authentication", "v4-0-config-system-service-ca"):

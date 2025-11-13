@@ -1,8 +1,8 @@
 package omoperator
 
 import (
-	"context"
 	"fmt"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/openshiftmanager/libraryopenshiftmanager"
 
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
@@ -15,13 +15,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 )
 
 // operator.openshift.io/authentications/cluster
-func projectOperatorAuthenticationCluster(ctx context.Context, mgmtKubeClient *dynamic.DynamicClient, controlPlaneNamespace string) (*libraryinputresources.Resource, error) {
+func projectOperatorAuthenticationCluster(inputCtx libraryopenshiftmanager.InputResourceGetterContext) (*libraryinputresources.Resource, error) {
 	gvr := corev1.SchemeGroupVersion.WithResource("configmaps")
-	authOperatorConfigMap, err := mgmtKubeClient.Resource(gvr).Namespace(controlPlaneNamespace).Get(ctx, operatorAuthenticationConfigMapName, metav1.GetOptions{})
+	authOperatorConfigMap, err := inputCtx.MgmtKubeClient.Resource(gvr).Namespace(inputCtx.ControlPlaneNamespace).Get(inputCtx.Ctx, operatorAuthenticationConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +29,7 @@ func projectOperatorAuthenticationCluster(ctx context.Context, mgmtKubeClient *d
 		return nil, err
 	}
 	if !found {
-		return nil, fmt.Errorf("missing cluster.yaml field in %s/%s configmap", controlPlaneNamespace, operatorAuthenticationConfigMapName)
+		return nil, fmt.Errorf("missing cluster.yaml field in %s/%s configmap", inputCtx.ControlPlaneNamespace, operatorAuthenticationConfigMapName)
 	}
 	unstructuredAuthOperator, err := decodeIndividualObj([]byte(authOperatorYaml))
 	if err != nil {
@@ -46,7 +45,7 @@ func projectOperatorAuthenticationCluster(ctx context.Context, mgmtKubeClient *d
 }
 
 // config.openshift.io/authentications/cluster resource doesn't exist in HCP we need to project it from HostedControlPlane
-func projectConfigAuthenticationCluster(hostedControlPlane *hypershiftv1beta1.HostedControlPlane) (*libraryinputresources.Resource, error) {
+func projectConfigAuthenticationCluster(inputCtx libraryopenshiftmanager.InputResourceGetterContext) (*libraryinputresources.Resource, error) {
 	cfg := &configv1.Authentication{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: configv1.SchemeGroupVersion.String(),
@@ -56,15 +55,15 @@ func projectConfigAuthenticationCluster(hostedControlPlane *hypershiftv1beta1.Ho
 			Name: "cluster",
 		},
 	}
-	if hostedControlPlane != nil && hostedControlPlane.Spec.Configuration != nil && hostedControlPlane.Spec.Configuration.Authentication != nil {
-		cfg.Spec = *hostedControlPlane.Spec.Configuration.Authentication
+	if inputCtx.HostedControlPlane != nil && inputCtx.HostedControlPlane.Spec.Configuration != nil && inputCtx.HostedControlPlane.Spec.Configuration.Authentication != nil {
+		cfg.Spec = *inputCtx.HostedControlPlane.Spec.Configuration.Authentication
 	}
 
 	return runtimeObjectToInputResource(cfg, configv1.SchemeGroupVersion.WithResource("authentications"))
 }
 
 // config.openshift.io/clusterversions/cluster resource doesn't exist in HCP we need to project it from HostedControlPlane
-func projectConfigClusterVersionCluster(hostedControlPlane *hypershiftv1beta1.HostedControlPlane) (*libraryinputresources.Resource, error) {
+func projectConfigClusterVersionCluster(inputCtx libraryopenshiftmanager.InputResourceGetterContext) (*libraryinputresources.Resource, error) {
 	clusterVersion := &configv1.ClusterVersion{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: configv1.SchemeGroupVersion.String(),
@@ -72,13 +71,13 @@ func projectConfigClusterVersionCluster(hostedControlPlane *hypershiftv1beta1.Ho
 		},
 		ObjectMeta: metav1.ObjectMeta{Name: "version"},
 		Spec: configv1.ClusterVersionSpec{
-			ClusterID: configv1.ClusterID(hostedControlPlane.Spec.ClusterID),
+			ClusterID: configv1.ClusterID(inputCtx.HostedControlPlane.Spec.ClusterID),
 			Capabilities: &configv1.ClusterVersionCapabilitiesSpec{
 				BaselineCapabilitySet:         configv1.ClusterVersionCapabilitySetNone,
-				AdditionalEnabledCapabilities: capabilities.CalculateEnabledCapabilities(hostedControlPlane.Spec.Capabilities),
+				AdditionalEnabledCapabilities: capabilities.CalculateEnabledCapabilities(inputCtx.HostedControlPlane.Spec.Capabilities),
 			},
-			Upstream: hostedControlPlane.Spec.UpdateService,
-			Channel:  hostedControlPlane.Spec.Channel,
+			Upstream: inputCtx.HostedControlPlane.Spec.UpdateService,
+			Channel:  inputCtx.HostedControlPlane.Spec.Channel,
 		},
 	}
 
