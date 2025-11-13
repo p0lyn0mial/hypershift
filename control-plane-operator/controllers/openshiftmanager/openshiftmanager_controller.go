@@ -35,6 +35,11 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	omController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactLowLevelOperator("authentications"), projectOperatorAuthenticationCluster)
+	omController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactConfigResource("authentications"), projectConfigAuthenticationCluster)
+	omController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactResource("config.openshift.io", "v1", "clusterversions", "", "version"), projectConfigClusterVersionCluster)
+	omController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactResource("route.openshift.io", "v1", "routes", "openshift-authentication", "oauth-openshift"), getRouteOpenshiftAuthenticationOauthOpenshift)
+	omController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactResource("", "v1", "services", "openshift-authentication", "oauth-openshift"), getServiceOpenshiftAuthenticationOauthOpenshift)
+	omController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactSecret("openshift-authentication", "v4-0-config-system-session"), getSecretOpenshiftAuthenticationConfigSystemSession)
 
 	return omController.SetupWithManager(mgr)
 }
