@@ -122,10 +122,10 @@ func getSecretOpenshiftAuthenticationConfigSystemSession(inputCtx libraryopenshi
 }
 
 // openshift-authentication/v4-0-config-system-cliconfig
-func getConfigMapOpenshiftAuthenticationConfigSystemCliconfig(ctx context.Context, mgmtKubeClient *dynamic.DynamicClient, controlPlaneNamespace string) (*libraryinputresources.Resource, error) {
+func getConfigMapOpenshiftAuthenticationConfigSystemCliconfig(inputCtx libraryopenshiftmanager.InputResourceGetterContext) (*libraryinputresources.Resource, error) {
 	standaloneResourceNamespace := "openshift-authentication"
 	standaloneResourceName := "v4-0-config-system-cliconfig"
-	res, err := getResourceToInputResources(ctx, coreConfigMapGVR, mgmtKubeClient, controlPlaneNamespace, hcpNameForNamespacedStandaloneResource(standaloneResourceNamespace, standaloneResourceName), standaloneResourceNamespace, standaloneResourceName)
+	res, err := getResourceToInputResources(inputCtx.Ctx, coreConfigMapGVR, inputCtx.MgmtKubeClient, inputCtx.ControlPlaneNamespace, hcpNameForNamespacedStandaloneResource(standaloneResourceNamespace, standaloneResourceName), standaloneResourceNamespace, standaloneResourceName)
 	if err != nil {
 		return nil, err
 	}

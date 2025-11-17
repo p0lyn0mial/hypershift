@@ -155,7 +155,7 @@ func (o *OpenshiftManagerOperator) Run(ctx context.Context) error {
 		return err
 	}
 
-	openshiftManagerController, err := libraryopenshiftmanager.New(ctrl.Log, mgmtCfg, o.Namespace, o.HostedControlPlaneName, o.InputDirectory, o.OutputDirectory)
+	openshiftManagerController, err := libraryopenshiftmanager.New(ctrl.Log, mgmtCfg, o.Namespace, o.HostedControlPlaneName, o.InputDirectory, o.OutputDirectory, "/Users/lszaszki/go/src/github.com/openshift/cluster-authentication-operator")
 	if err != nil {
 		return err
 	}
@@ -166,6 +166,9 @@ func (o *OpenshiftManagerOperator) Run(ctx context.Context) error {
 	openshiftManagerController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactResource("route.openshift.io", "v1", "routes", "openshift-authentication", "oauth-openshift"), getRouteOpenshiftAuthenticationOauthOpenshift)
 	openshiftManagerController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactResource("", "v1", "services", "openshift-authentication", "oauth-openshift"), getServiceOpenshiftAuthenticationOauthOpenshift)
 	openshiftManagerController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactSecret("openshift-authentication", "v4-0-config-system-session"), getSecretOpenshiftAuthenticationConfigSystemSession)
+	openshiftManagerController.RegisterInputResourceGetterFuncOrDie(libraryinputresources.ExactConfigMap("openshift-authentication", "v4-0-config-system-cliconfig"), getConfigMapOpenshiftAuthenticationConfigSystemCliconfig)
+
+	openshiftManagerController.RegisterApplyOutputResourceFuncOrDie(libraryoutputresources.ExactConfigMap("openshift-authentication", "v4-0-config-system-cliconfig"), applyConfigMapOpenshiftAuthenticationConfigSystemCliconfig)
 
 	return openshiftManagerController.Start(ctx)
 
@@ -323,7 +326,7 @@ func (o *OpenshiftManagerOperator) getAuthOperatorRequiredInputResourcesForResou
 		case libraryinputresources.ExactSecret("openshift-authentication", "v4-0-config-system-router-certs"):
 			handleResourceInstanceAndErrorFn(projectSecretOpenshiftAuthenticationConfigSystemRouterCerts(ctx, mgmtKubeClient, o.Namespace, hostedControlPlane))
 		case libraryinputresources.ExactConfigMap("openshift-authentication", "v4-0-config-system-cliconfig"):
-			handleResourceInstanceAndErrorFn(getConfigMapOpenshiftAuthenticationConfigSystemCliconfig(ctx, mgmtKubeClient, o.Namespace))
+			handleResourceInstanceAndErrorFn(getConfigMapOpenshiftAuthenticationConfigSystemCliconfig(inputCtx))
 		case libraryinputresources.ExactSecret("openshift-authentication", "v4-0-config-system-session"):
 			handleResourceInstanceAndErrorFn(getSecretOpenshiftAuthenticationConfigSystemSession(inputCtx))
 		case libraryinputresources.ExactSecret("openshift-authentication", "v4-0-config-system-serving-cert"):

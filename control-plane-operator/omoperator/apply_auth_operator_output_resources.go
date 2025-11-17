@@ -3,6 +3,7 @@ package omoperator
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/hypershift/control-plane-operator/controllers/openshiftmanager/libraryopenshiftmanager"
 
 	"github.com/openshift/library-go/pkg/manifestclient"
 
@@ -73,6 +74,14 @@ func applyCreateSecretOpenshiftAuthenticationConfigSystemOcpBrandingTemplate(ctx
 	// under "openshift-authentication--v4-0-config-system-ocp-branding-template" name
 
 	return createUnstructuredResourceForSerializedRequest(ctx, coreSecretGVR, mgmtKubeClient, requestToCreate, controlPlaneNamespace)
+}
+
+func applyConfigMapOpenshiftAuthenticationConfigSystemCliconfig(applyCtx libraryopenshiftmanager.ApplyOutputResourceContext) error {
+	switch applyCtx.ActionType {
+	case manifestclient.ActionCreate:
+		return applyCreateConfigMapOpenshiftAuthenticationConfigSystemCliconfig(applyCtx.Ctx, applyCtx.MgmtKubeClient, applyCtx.Request, applyCtx.ControlPlaneNamespace)
+	}
+	return fmt.Errorf("applyConfigMapOpenshiftAuthenticationConfigSystemCliconfig action type: %v not supported", applyCtx.ActionType)
 }
 
 // openshift-authentication/v4-0-config-system-cliconfig
