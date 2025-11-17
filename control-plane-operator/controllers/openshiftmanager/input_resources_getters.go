@@ -1,7 +1,6 @@
 package openshiftmanager
 
 import (
-	"context"
 	"fmt"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -15,9 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 )
 
 const (
@@ -96,6 +93,20 @@ func projectConfigClusterVersionCluster(inputCtx libraryopenshiftmanager.InputRe
 	}
 
 	return runtimeObjectToInputResource(clusterVersion, configv1.SchemeGroupVersion.WithResource("clusterversions"))
+}
+
+// openshift-authentication/v4-0-config-system-cliconfig
+func getConfigMapOpenshiftAuthenticationConfigSystemCliconfig(inputCtx libraryopenshiftmanager.InputResourceGetterContext) (*libraryinputresources.Resource, error) {
+	standaloneResourceNamespace := "openshift-authentication"
+	standaloneResourceName := "v4-0-config-system-cliconfig"
+	res, err := getResourceToInputResources(inputCtx.Ctx, coreConfigMapGVR, inputCtx.MgmtKubeClient, inputCtx.ControlPlaneNamespace, hcpNameForNamespacedStandaloneResource(standaloneResourceNamespace, standaloneResourceName), standaloneResourceNamespace, standaloneResourceName)
+	if err != nil {
+		return nil, err
+	}
+	if err = revertTransformationsToConfigMapOpenshiftAuthenticationConfigSystemCliconfig(res.Content); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 // openshift-authentication/oauth-openshift
@@ -182,37 +193,4 @@ func getSecretOpenshiftAuthenticationConfigSystemSession(inputCtx libraryopenshi
 	standaloneResourceNamespace := "openshift-authentication"
 	standaloneResourceName := "v4-0-config-system-session"
 	return getResourceToInputResources(inputCtx.Ctx, coreSecretGVR, inputCtx.MgmtKubeClient, inputCtx.ControlPlaneNamespace, hcpNameForNamespacedStandaloneResource(standaloneResourceNamespace, standaloneResourceName), standaloneResourceNamespace, standaloneResourceName)
-}
-
-func runtimeObjectToInputResource(obj runtime.Object, gvr schema.GroupVersionResource) (*libraryinputresources.Resource, error) {
-	rawObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
-	if err != nil {
-		return nil, err
-	}
-
-	ret := &libraryinputresources.Resource{
-		ResourceType: gvr,
-		Content:      &unstructured.Unstructured{Object: rawObj},
-	}
-	return ret, nil
-}
-
-func getResourceToInputResources(ctx context.Context, gvr schema.GroupVersionResource, mgmtKubeClient *dynamic.DynamicClient, controlPlaneNamespace, controlPlaneResourceName, standaloneResourceNamespace, standaloneResourceName string) (*libraryinputresources.Resource, error) {
-	unstructuredSecret, err := mgmtKubeClient.Resource(gvr).Namespace(controlPlaneNamespace).Get(ctx, controlPlaneResourceName, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	unstructuredSecret.SetNamespace(standaloneResourceNamespace)
-	unstructuredSecret.SetName(standaloneResourceName)
-	return &libraryinputresources.Resource{
-		ResourceType: gvr,
-		Content:      unstructuredSecret,
-	}, nil
-}
-
-// TODO:figure out the best naming scheme for namespaced resources
-// operator-name--namespace--name
-func hcpNameForNamespacedStandaloneResource(standaloneNamespace, standaloneName string) string {
-	return standaloneNamespace + "--" + standaloneName
 }
